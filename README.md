@@ -1,4 +1,4 @@
-# **Finding Lane Lines on the Road** 
+# **Finding Lane Lines on the Road**
 [![Udacity - Self-Driving Car NanoDegree](https://s3.amazonaws.com/udacity-sdc/github/shield-carnd.svg)](http://www.udacity.com/drive)
 
 <img src="examples/laneLines_thirdPass.jpg" width="480" alt="Combined Image" />
@@ -8,46 +8,96 @@ Overview
 
 When we drive, we use our eyes to decide where to go.  The lines on the road that show us where the lanes are act as our constant reference for where to steer the vehicle.  Naturally, one of the first things we would like to do in developing a self-driving car is to automatically detect lane lines using an algorithm.
 
-In this project you will detect lane lines in images using Python and OpenCV.  OpenCV means "Open-Source Computer Vision", which is a package that has many useful tools for analyzing images.  
-
-To complete the project, two files will be submitted: a file containing project code and a file containing a brief write up explaining your solution. We have included template files to be used both for the [code](https://github.com/udacity/CarND-LaneLines-P1/blob/master/P1.ipynb) and the [writeup](https://github.com/udacity/CarND-LaneLines-P1/blob/master/writeup_template.md).The code file is called P1.ipynb and the writeup template is writeup_template.md 
-
-To meet specifications in the project, take a look at the requirements in the [project rubric](https://review.udacity.com/#!/rubrics/322/view)
-
-
-Creating a Great Writeup
----
-For this project, a great writeup should provide a detailed response to the "Reflection" section of the [project rubric](https://review.udacity.com/#!/rubrics/322/view). There are three parts to the reflection:
-
-1. Describe the pipeline
-
-2. Identify any shortcomings
-
-3. Suggest possible improvements
-
-We encourage using images in your writeup to demonstrate how your pipeline works.  
-
-All that said, please be concise!  We're not looking for you to write a book here: just a brief description.
-
-You're not required to use markdown for your writeup.  If you use another method please just submit a pdf of your writeup. Here is a link to a [writeup template file](https://github.com/udacity/CarND-LaneLines-P1/blob/master/writeup_template.md). 
+In this project we will detect lane lines in images using Python and OpenCV. OpenCV means "Open-Source Computer Vision", which is a package that has many useful tools for analyzing images.
 
 
 The Project
 ---
 
-## If you have already installed the [CarND Term1 Starter Kit](https://github.com/udacity/CarND-Term1-Starter-Kit/blob/master/README.md) you should be good to go!   If not, you should install the starter kit to get started on this project. ##
+The goals / steps of this project are the following:
+* Make a pipeline that finds lane lines on the road
 
-**Step 1:** Set up the [CarND Term1 Starter Kit](https://classroom.udacity.com/nanodegrees/nd013/parts/fbf77062-5703-404e-b60c-95b78b2f3f9e/modules/83ec35ee-1e02-48a5-bdb7-d244bd47c2dc/lessons/8c82408b-a217-4d09-b81d-1bda4c6380ef/concepts/4f1870e0-3849-43e4-b670-12e6f2d4b7a7) if you haven't already.
 
-**Step 2:** Open the code in a Jupyter Notebook
+[//]: # (Image References)
 
-You will complete the project code in a Jupyter notebook.  If you are unfamiliar with Jupyter Notebooks, check out <A HREF="https://www.packtpub.com/books/content/basics-jupyter-notebook-and-python" target="_blank">Cyrille Rossant's Basics of Jupyter Notebook and Python</A> to get started.
+[image1]: ./test_images/solidWhiteRight.jpg "Source image"
+[image2]: ./test_images_output/gray.jpg "Gray image"
+[image3]: ./test_images_output/blurred.jpg "Blurred image"
+[image4]: ./test_images_output/canny.jpg "after applying Canny edge detection"
+[image5]: ./test_images_output/mask.jpg "Masked image"
+[image6]: ./test_images_output/hough.jpg "after applying Hough line transform"
+[image7]: ./test_images_output/final.jpg "Final image"
 
-Jupyter is an Ipython notebook where you can run blocks of code and see results interactively.  All the code for this project is contained in a Jupyter notebook. To start Jupyter in your browser, use terminal to navigate to your project directory and then run the following command at the terminal prompt (be sure you've activated your Python 3 carnd-term1 environment as described in the [CarND Term1 Starter Kit](https://github.com/udacity/CarND-Term1-Starter-Kit/blob/master/README.md) installation instructions!):
+---
 
-`> jupyter notebook`
 
-A browser window will appear showing the contents of the current directory.  Click on the file called "P1.ipynb".  Another browser window will appear displaying the notebook.  Follow the instructions in the notebook to complete the project.  
+### Pipeline
 
-**Step 3:** Complete the project and submit both the Ipython notebook and the project writeup
+My pipeline primarily consists of the following steps. The function `process_image()` implements the pipeline.
+
+#### Image processing
+* First, I read the original image with shape `(540, 960, 3)`. An image looks as follows.
+
+![alt text][image1]
+
+* Then I convert it to gray scale image using `cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)`. It looks as follows.
+
+![alt text][image2]
+
+* Then I applied a smoothening technique on it called `Gaussian blurring` using `cv2.GaussianBlur()` and 5 as kernel size.
+
+![alt text][image3]
+
+#### Edge detection
+* Next, I applied `Canny's edge detection` algorithm on the grayed out image to find all possible edges using `cv2.Canny()`. I used 50 as the low threshold and 150 as high threshold for this purpose.
+
+![alt text][image4]
+
+* Since the above algorithm finds other edges as well along with the edges on the lane, I used a trapezoidal mask to select the edges only around the lane. The size of the trapezoid as follows:
+```python
+bottom_left = (135, 960)
+top_left = (400, 335)
+top_right = (565, 335)
+bottom_right = (920, 960)
+```
+
+![alt text][image5]
+
+#### Hough line transform
+* Then I apply `Hough line transform` algorithm on the masked image to approximate lines (by extrapolation, see function `extrapolate_lane_lines()`) from several edges obtained from Canny's algorithm. This results in only two sets of lines, one for the left lane and the other for the right lane. I used `cv2.HoughLinesP()` for this purpose with the following parameters.
+```python
+rho = 1                 # distance resolution in pixels of the Hough grid
+theta = np.pi / 180     # angular resolution in radians of the Hough grid
+threshold = 35          # minimum number of votes (intersections in Hough grid cell)
+min_line_len = 10       # minimum number of pixels making up a line
+max_line_gap = 25       # maximum gap in pixels between connectable line segments
+slope_threshold = 0.5
+```
+
+![alt text][image6]
+
+#### Drawing detected lane lines
+* Our final task is to transform the left set of lines to a `single left line` and the right set of lines to a `single right line`. I do this for each lane in the `draw_lines()` function as follows:
+    * I discard any lines with slope close to 0 (represents horizontal lines)
+    * Then I took the mean of x and y coordinates and the gradient of the lines, which will help us provide a unique line. With the help of a bookkeeping variable, I found the topmost y value for the lines and find the corresponding x using the above line equation.
+    * Assuming the line touches the bottom end of the image, we get another set of points. This gives us a single line.
+
+![alt text][image7]
+
+
+### Discussions
+
+* The pipeline still does not work with the challenge video correctly. This possibly needs few additional processing to the source image to identify other noise and remove them before applying Canny's algorithm.
+* I assumed the lane lines end to the bottom end of the image to find the second set of points. This is not true for the challenge video and need to be addressed.
+* Of course, I do not take care of other real-world noises on image like rain, shadow, people, etc. or other possible lines on the road (like, x signs and zebra crossing, left only sign, etc), or sharp turns.
+
+and many many more...This is just the beginning :)
+
+
+### References
+
+Primarily the following three.
+* Medium posts about self-driving
+* Computer vision udacity lecture and other course provided resource
+* sdc-nd slack channel
 
